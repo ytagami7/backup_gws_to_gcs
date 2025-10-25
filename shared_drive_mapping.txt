@@ -1,0 +1,11 @@
+Archive:0AFLnJQdQIM9rUk9PVA
+HP制作:0AKjeSv52oIXYUk9PVA
+HP保守:0AL7glzPcWxCyUk9PVA
+業務全般:0AJc_lRgY3BtyUk9PVA
+YPS共有ドライブ（新）:0ALRkKdDMC9GpUk9PVA
+個人ドライブ移行用:0ADbZgWE9SxoUUk9PVA
+管理（総務・経理）:0AFyAALPKeixeUk9PVA
+YPS Ops Guard Backup:0AJWc77iCArK9Uk9PVA
+顧客とのファイル共有:0ALoiLzBu516PUk9PVA
+システム事業:0AKstkXiVDB47Uk9PVA
+研修用テストドライブ:0AHsv-Xn8nLT1Uk9PVA
