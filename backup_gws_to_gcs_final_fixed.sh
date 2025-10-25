@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ################################################################################
-# GWS to GCS Backup Script (Base + Incremental + Shared Drives) - NO LOOP v2
+# GWS to GCS Backup Script (Base + Incremental + Shared Drives) - NO LOOP v3
 ################################################################################
 #
 # --- 使用方法 ---
@@ -19,6 +19,11 @@
 # または、このスクリプトをCtrl+Cで中断してください。
 #
 # --- 変更履歴 ---
+# v3 (2025-10-25):
+#   - WordPress全体を除外（レベル1: wp-content, wp-includes, wp-admin, wp-*.php等）
+#   - *.nefファイルの除外パターンを **/*.nef に修正（再帰的マッチング）
+#   - *.NEF（大文字）も追加
+#
 # v2 (2025-10-25):
 #   - *.nefファイルを除外パターンに追加
 #   - 無限ループ対策を強化（問題フォルダを直接除外）
@@ -94,6 +99,7 @@ SHARED_DRIVE_MAPPING_FILE="/home/ytagami/shared_drive_mapping.txt"
 
 # 除外ファイルパターン
 EXCLUDE_PATTERNS=(
+  # 圧縮ファイル
   "*.zip"
   "*.tar"
   "*.gz"
@@ -101,10 +107,14 @@ EXCLUDE_PATTERNS=(
   "*.7z"
   "*.tar.gz"
   "*.tgz"
+  
+  # 実行ファイル
   "*.exe"
   "*.msi"
   "*.app"
   "*.dmg"
+  
+  # 動画ファイル
   "*.mp4"
   "*.avi"
   "*.mov"
@@ -112,6 +122,8 @@ EXCLUDE_PATTERNS=(
   "*.wmv"
   "*.flv"
   "*.webm"
+  
+  # 音声ファイル
   "*.mp3"
   "*.wav"
   "*.flac"
@@ -119,8 +131,22 @@ EXCLUDE_PATTERNS=(
   "*.m4a"
   "*.ogg"
   "*.wma"
-  "*.nef"
+  
+  # RAWファイル（修正: 再帰的マッチング）
+  "**/*.nef"
+  "**/*.NEF"
+  
+  # その他
   "www*/**"
+  
+  # WordPress全体除外（レベル1）
+  "**/wp-content/**"       # WordPressコンテンツディレクトリ全体
+  "**/wp-includes/**"      # WordPressコアファイル
+  "**/wp-admin/**"         # WordPress管理画面
+  "**/wp-*.php"            # WordPressコアPHPファイル
+  "**/.htaccess"           # Apache設定ファイル
+  "**/xmlrpc.php"          # XML-RPC
+  "**/.well-known/**"      # SSL証明書検証用
 )
 
 # 無限ループ防止: 問題のあるフォルダを直接除外
@@ -148,11 +174,11 @@ RCLONE_RETRIES=3
 # 無限ループ対策: 深さ制限を20に設定（旧: 100）
 RCLONE_MAX_DEPTH=20
 
- # テストモード: 転送量制限（100MB）
+# テストモード: 転送量制限（100MB）
 TEST_MAX_TRANSFER="100M"
 
- # 共有ドライブアクセス用の管理者
- ADMIN_USER="ytagami@ycomps.co.jp"
+# 共有ドライブアクセス用の管理者
+ADMIN_USER="ytagami@ycomps.co.jp"
 
 #==============================================================================
 # モード判定
@@ -170,12 +196,6 @@ fi
 if [ "$DRY_RUN" = true ]; then
   MODE_INFO="$MODE_INFO + DRY-RUN (no actual transfer)"
 fi
-
-#==============================================================================
-
-
-
-
 
 #==============================================================================
 # ログ関数
@@ -472,7 +492,7 @@ backup_shared_drive() {
       "${RCLONE_REMOTE_NAME}:/"
       "$base_path"
       --drive-impersonate "$ADMIN_USER"
-    #  --drive-shared-with-me
+      # --drive-shared-with-me
       --drive-root-folder-id "$drive_id"
       --log-file="$LOG_FILE"
       --log-level INFO
@@ -524,7 +544,7 @@ backup_shared_drive() {
       "${RCLONE_REMOTE_NAME}:/"
       "$incr_path"
       --drive-impersonate "$ADMIN_USER"
-    #  --drive-shared-with-me
+      # --drive-shared-with-me
       --drive-root-folder-id "$drive_id"
       --log-file="$LOG_FILE"
       --log-level INFO
@@ -580,7 +600,7 @@ backup_shared_drive() {
       
       rclone lsf "${RCLONE_REMOTE_NAME}:/" \
         --drive-impersonate "$ADMIN_USER" \
-      #  --drive-shared-with-me \
+        # --drive-shared-with-me \
         --drive-root-folder-id "$drive_id" \
         --files-only \
         --recursive \
@@ -621,12 +641,13 @@ backup_shared_drive() {
 #==============================================================================
 
 log "=========================================="
-log "GWS to GCS Backup Started (MyDrive + Shared Drives) v2"
+log "GWS to GCS Backup Started (MyDrive + Shared Drives) v3"
 log "Date: $(date)"
 log "Mode: $MODE_INFO"
 log "無限ループ対策: --skip-links --max-depth $RCLONE_MAX_DEPTH"
 log "除外フォルダ: ${LOOP_PREVENTION_EXCLUDES[*]}"
-log "NEFファイル除外: 有効"
+log "NEFファイル除外: 有効 (**/*.nef, **/*.NEF)"
+log "WordPress除外: 有効（レベル1: 全体除外）"
 log "=========================================="
 
 if [ "$PRODUCTION_MODE" = true ]; then
@@ -658,7 +679,7 @@ done
 
 log ""
 log "=========================================="
-log "GWS to GCS Backup Completed (MyDrive + Shared Drives) v2"
+log "GWS to GCS Backup Completed (MyDrive + Shared Drives) v3"
 log "Date: $(date)"
 log "Mode: $MODE_INFO"
 log "=========================================="
