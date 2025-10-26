@@ -2,7 +2,7 @@
 
 ################################################################################
 # GWS to GCS Backup Script (Base + Incremental + Cumulative Deletion)
-# Version: 7.12
+# Version: 7.13
 ################################################################################
 #
 # --- 使用方法 ---
@@ -24,6 +24,11 @@
 ################################################################################
 # 変更履歴 (CHANGELOG)
 ################################################################################
+#
+# Version 7.13 (2025-10-26)
+# - 初回バックアップ判別ロジックを統一化
+# - マイドライブと共有ドライブの両方でファイル数による判別を使用
+# - is_first_backup() 関数を削除し、統一ロジックに統合
 #
 # Version 7.12 (2025-10-26)
 # - テストモードのファイル数制限を --max-duration 30s で実現
@@ -341,22 +346,6 @@ get_shared_drive_id() {
   echo "$drive_id"
 }
 
-#==============================================================================
-# 初回判定関数
-#==============================================================================
-
-is_first_backup() {
-  local user=$1
-  local safe_user=$2
-  local base_path="gcs_backup:${GCS_BUCKET}/${GCS_BACKUP_ROOT}/${safe_user}/base/"
-  
-  # baseフォルダが存在するか確認
-  if rclone lsf "$base_path" --max-depth 1 2>/dev/null | grep -q .; then
-    return 1  # 既にbaseが存在（初回ではない）
-  else
-    return 0  # baseが存在しない（初回）
-  fi
-}
 
 #==============================================================================
 # 統一バックアップ関数
@@ -391,18 +380,11 @@ backup_drive() {
     cumulative_deleted_path="gs://${GCS_BUCKET}/${GCS_BACKUP_ROOT}/shared_drives/${safe_name}/CUMULATIVE_DELETED.txt"
   fi
   
-  # 初回判定
+  # 初回判定（統一ロジック：ファイル数で判別）
   local is_first=false
-  if [ "$drive_type" = "mydrive" ]; then
-    if is_first_backup "$drive_name" "$safe_name"; then
-      is_first=true
-    fi
-  else
-    # Shared Drives: baseフォルダの存在確認（ファイルの存在確認）
-    local file_count=$(rclone lsf "$base_path" --files-only -R 2>/dev/null | wc -l)
-    if [ "$file_count" -eq 0 ]; then
-      is_first=true
-    fi
+  local file_count=$(rclone lsf "$base_path" --files-only -R 2>/dev/null | wc -l)
+  if [ "$file_count" -eq 0 ]; then
+    is_first=true
   fi
   
   if [ "$is_first" = true ]; then
