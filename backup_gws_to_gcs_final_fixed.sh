@@ -393,8 +393,9 @@ backup_drive() {
       is_first=true
     fi
   else
-    # Shared Drives: baseフォルダの存在確認
-    if ! rclone lsf "$base_path" --max-depth 1 2>/dev/null | grep -q .; then
+    # Shared Drives: baseフォルダの存在確認（ファイルの存在確認）
+    local file_count=$(rclone lsf "$base_path" --files-only -R 2>/dev/null | wc -l)
+    if [ "$file_count" -eq 0 ]; then
       is_first=true
     fi
   fi
