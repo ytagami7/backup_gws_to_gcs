@@ -2,7 +2,7 @@
 
 ################################################################################
 # GWS to GCS Backup Script (Base + Incremental + Cumulative Deletion)
-# Version: 7.9
+# Version: 7.10
 ################################################################################
 #
 # --- 使用方法 ---
@@ -24,6 +24,11 @@
 ################################################################################
 # 変更履歴 (CHANGELOG)
 ################################################################################
+#
+# Version 7.10 (2025-10-26)
+# - --max-files オプションが存在しないため、--max-transfer で転送量制限を実現
+# - テストモードでは100MBの転送量制限でファイル数制限を代替
+# - テストモードと本番モードの両方で --exclude のみを使用
 #
 # Version 7.9 (2025-10-26)
 # - テストモードと本番モードの両方で --exclude のみを使用するように統一
@@ -417,17 +422,17 @@ backup_drive() {
       rclone_opts+=("--drive-shared-with-me" "--drive-root-folder-id" "$drive_id")
     fi
     
-    # テストモード: 除外パターン + ファイル数制限
+    # テストモード: 除外パターン + 転送量制限
     if [ "$TEST_MODE" = true ]; then
-      log "🧪 テストモード: 除外パターン適用 + 最初の${MAX_FILES_PER_USER}ファイルのみ処理"
+      log "🧪 テストモード: 除外パターン適用 + 転送量制限"
       
       # 除外パターンを適用
       for pattern in "${EXCLUDE_PATTERNS[@]}"; do
         rclone_opts+=(--exclude "$pattern")
       done
       
-      # ファイル数制限
-      rclone_opts+=(--max-files $MAX_FILES_PER_USER)
+      # 転送量制限（100ファイル相当のサイズ）
+      rclone_opts+=(--max-transfer 100M)
     else
       # 通常モード: 除外パターンを使用
       for pattern in "${EXCLUDE_PATTERNS[@]}"; do
@@ -494,17 +499,17 @@ backup_drive() {
       rclone_opts+=("--drive-shared-with-me" "--drive-root-folder-id" "$drive_id")
     fi
     
-    # テストモード: 除外パターン + ファイル数制限
+    # テストモード: 除外パターン + 転送量制限
     if [ "$TEST_MODE" = true ]; then
-      log "🧪 テストモード: 除外パターン適用 + 最初の${MAX_FILES_PER_USER}ファイルのみ処理"
+      log "🧪 テストモード: 除外パターン適用 + 転送量制限"
       
       # 除外パターンを適用
       for pattern in "${EXCLUDE_PATTERNS[@]}"; do
         rclone_opts+=(--exclude "$pattern")
       done
       
-      # ファイル数制限
-      rclone_opts+=(--max-files $MAX_FILES_PER_USER)
+      # 転送量制限（100ファイル相当のサイズ）
+      rclone_opts+=(--max-transfer 100M)
     else
       # 通常モード: 除外パターンを使用
       for pattern in "${EXCLUDE_PATTERNS[@]}"; do
