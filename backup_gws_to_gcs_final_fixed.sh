@@ -121,15 +121,17 @@ set -euo pipefail
 TEST_MODE=false
 DRY_RUN=false
 PRODUCTION_MODE=false
+FORCE_FULL=false
 MAX_FILES_PER_USER=100
 
 # 引数なしチェック
 if [ $# -eq 0 ]; then
   echo "Error: No arguments provided"
-  echo "Usage: $0 [--production] [--test] [--dry-run]"
+  echo "Usage: $0 [--production] [--test] [--dry-run] [--force-full]"
   echo "  --production: 本番モード（実際のバックアップ実行）"
   echo "  --test: テストモード（ファイル数制限）"
   echo "  --dry-run: Dry-runモード（実際の転送なし）"
+  echo "  --force-full: 全ドライブを初回バックアップとして強制実行"
   echo ""
   echo "Valid combinations:"
   echo "  --production (本番のみ)"
@@ -153,9 +155,13 @@ while [[ $# -gt 0 ]]; do
       PRODUCTION_MODE=true
       shift
       ;;
+    --force-full)
+      FORCE_FULL=true
+      shift
+      ;;
     *)
       echo "Unknown option: $1"
-      echo "Usage: $0 [--production] [--test] [--dry-run]"
+      echo "Usage: $0 [--production] [--test] [--dry-run] [--force-full]"
       exit 1
       ;;
   esac
@@ -164,7 +170,7 @@ done
 # 引数の矛盾チェック
 if [ "$PRODUCTION_MODE" = true ] && [ "$TEST_MODE" = true ]; then
   echo "Error: --production and --test cannot be used together"
-  echo "Usage: $0 [--production] [--test] [--dry-run]"
+  echo "Usage: $0 [--production] [--test] [--dry-run] [--force-full]"
   echo "  --production: 本番モード（実際のバックアップ実行）"
   echo "  --test: テストモード（ファイル数制限）"
   echo "  --dry-run: Dry-runモード（実際の転送なし）"
@@ -173,7 +179,7 @@ fi
 
 if [ "$PRODUCTION_MODE" = true ] && [ "$DRY_RUN" = true ]; then
   echo "Error: --production and --dry-run cannot be used together"
-  echo "Usage: $0 [--production] [--test] [--dry-run]"
+  echo "Usage: $0 [--production] [--test] [--dry-run] [--force-full]"
   echo "  --production: 本番モード（実際のバックアップ実行）"
   echo "  --test: テストモード（ファイル数制限）"
   echo "  --dry-run: Dry-runモード（実際の転送なし）"
@@ -193,12 +199,12 @@ RCLONE_REMOTE_NAME="gdrive_service_account"
 
 # バックアップ対象のユーザーメールアドレス
 USERS=(
-  #"a.ohsaki@ycomps.co.jp"
-  #"a.tanaka@ycomps.co.jp"
+  "a.ohsaki@ycomps.co.jp"
+  "a.tanaka@ycomps.co.jp"
   "aikawa@ycomps.co.jp"
-  #"k.koyama@ycomps.co.jp"
-  #"tutida@ycomps.co.jp"
-  #"ytagami@ycomps.co.jp"
+  "k.koyama@ycomps.co.jp"
+  "tutida@ycomps.co.jp"
+  "ytagami@ycomps.co.jp"
 )
 
 # 共有ドライブ設定（実際に存在するドライブ）
@@ -269,7 +275,7 @@ SHUTDOWN_DELAY=300
 RCLONE_TRANSFERS=4
 RCLONE_CHECKERS=8
 RCLONE_CHUNK_SIZE="64M"
-RCLONE_TPS_LIMIT=10
+RCLONE_TPS_LIMIT=150
 RCLONE_TIMEOUT="3h"
 RCLONE_RETRIES=3
 
@@ -364,6 +370,7 @@ execute_rclone_backup() {
   local drive_type="$4"
   local drive_name="$5"
   local drive_id="$6"
+  local last_backup_time="${7:-}"  # 前回バックアップ時刻（増分バックアップ用）
   
   # 基本オプション
   local rclone_opts=(
@@ -383,9 +390,14 @@ execute_rclone_backup() {
     --progress
   )
   
-  # 増分バックアップの場合のみ --max-age を追加
+  # 増分バックアップの場合の時刻制限オプション
   if [ "$backup_type" = "incremental" ]; then
-    rclone_opts+=(--max-age 24h)
+    if [ -n "$last_backup_time" ]; then
+      # 前回バックアップ時刻以降の変更を対象
+      rclone_opts+=(--min-age "$last_backup_time")
+    fi
+    # 前回時刻が取得できない場合はフルバックアップにフォールバックするため、
+    # ここでは時刻制限オプションを追加しない
   fi
   
   # ドライブタイプ別のオプション
@@ -450,19 +462,22 @@ backup_drive() {
   if [ "$drive_type" = "mydrive" ]; then
     safe_name=$(echo "$drive_name" | sed 's/@/_AT_/g' | sed 's/\./_DOT_/g')
   else
-    safe_name=$(echo "$drive_name" | sed 's/[^a-zA-Z0-9_-]/_/g')
+    # 共有ドライブ名をBase64エンコード（以前の仕様）
+    safe_name=$(echo "$drive_name" | base64 | sed 's/=//g' | sed 's/K$//')
   fi
   
   # パス設定
-  local base_path incr_path cumulative_deleted_path
+  local base_path incr_path cumulative_deleted_path last_backup_time_path
   if [ "$drive_type" = "mydrive" ]; then
     base_path="gcs_backup:${GCS_BUCKET}/${GCS_BACKUP_ROOT}/${safe_name}/base/"
     incr_path="gcs_backup:${GCS_BUCKET}/${GCS_BACKUP_ROOT}/${safe_name}/incremental/${BACKUP_DATE}/"
     cumulative_deleted_path="gs://${GCS_BUCKET}/${GCS_BACKUP_ROOT}/${safe_name}/CUMULATIVE_DELETED.txt"
+    last_backup_time_path="/home/ytagami/backup_times/${safe_name}_LAST_BACKUP_TIME.txt"
   else
     base_path="gcs_backup:${GCS_BUCKET}/${GCS_BACKUP_ROOT}/shared_drives/${safe_name}/base/"
     incr_path="gcs_backup:${GCS_BUCKET}/${GCS_BACKUP_ROOT}/shared_drives/${safe_name}/incremental/${BACKUP_DATE}/"
     cumulative_deleted_path="gs://${GCS_BUCKET}/${GCS_BACKUP_ROOT}/shared_drives/${safe_name}/CUMULATIVE_DELETED.txt"
+    last_backup_time_path="/home/ytagami/backup_times/shared_${safe_name}_LAST_BACKUP_TIME.txt"
   fi
   
   # 初回判定（統一ロジック：ファイル数で判別）
@@ -472,12 +487,39 @@ backup_drive() {
     is_first=true
   fi
   
+  # --force-full オプションが指定された場合は強制的に初回バックアップとして実行
+  if [ "$FORCE_FULL" = true ]; then
+    is_first=true
+    log "🔄 FORCE-FULL: 全ドライブを初回バックアップとして強制実行"
+  fi
+  
+  # 前回バックアップ時刻を読み込み（増分バックアップ用）
+  local last_backup_time=""
+  if [ "$is_first" = false ]; then
+    last_backup_time=$(cat "$last_backup_time_path" 2>/dev/null || echo "")
+    if [ -n "$last_backup_time" ]; then
+      log "📅 前回バックアップ時刻: $last_backup_time"
+    else
+      log "⚠️  前回バックアップ時刻が取得できません。フルバックアップを実行します"
+      is_first=true
+    fi
+  fi
+  
   if [ "$is_first" = true ]; then
     log "📦 初回バックアップ: フルバックアップを base/ に保存"
     log "Backup destination: $base_path"
     
     # 統合されたrclone実行関数を呼び出し
     execute_rclone_backup "" "$base_path" "initial" "$drive_type" "$drive_name" "$drive_id"
+    
+    # バックアップ成功後、現在時刻を記録（本番モードのみ）
+    if [ $? -eq 0 ] && [ "$PRODUCTION_MODE" = true ]; then
+      # backup_timesディレクトリを作成
+      mkdir -p "/home/ytagami/backup_times"
+      current_time=$(date -u +%Y-%m-%dT%H:%M:%S)
+      echo "$current_time" > "$last_backup_time_path"
+      log "📅 バックアップ時刻記録: $current_time"
+    fi
     
     # 累積削除リストを初期化（空ファイル）
     if [ "$PRODUCTION_MODE" = true ]; then
@@ -486,11 +528,24 @@ backup_drive() {
     fi
     
   else
-    log "🔄 増分バックアップ: 過去24時間の変更のみ"
+    if [ -n "$last_backup_time" ]; then
+      log "🔄 増分バックアップ: 前回バックアップ時刻以降の変更 ($last_backup_time)"
+    else
+      log "🔄 増分バックアップ: 過去24時間の変更のみ"
+    fi
     log "Backup destination: $incr_path"
     
     # 統合されたrclone実行関数を呼び出し
-    execute_rclone_backup "" "$incr_path" "incremental" "$drive_type" "$drive_name" "$drive_id"
+    execute_rclone_backup "" "$incr_path" "incremental" "$drive_type" "$drive_name" "$drive_id" "$last_backup_time"
+    
+    # バックアップ成功後、現在時刻を記録（本番モードのみ）
+    if [ $? -eq 0 ] && [ "$PRODUCTION_MODE" = true ]; then
+      # backup_timesディレクトリを作成
+      mkdir -p "/home/ytagami/backup_times"
+      current_time=$(date -u +%Y-%m-%dT%H:%M:%S)
+      echo "$current_time" > "$last_backup_time_path"
+      log "📅 バックアップ時刻記録: $current_time"
+    fi
     
     # 削除ファイル検知（本番モードのみ）
     if [ "$PRODUCTION_MODE" = true ]; then
@@ -530,9 +585,12 @@ backup_shared_drive() {
 # メイン処理
 #==============================================================================
 
+log ""
+log ""
+log ""
 log "=========================================="
 log "GWS to GCS Backup Started"
-log "Date: $(date)"
+log "Date: $(TZ='Asia/Tokyo' date)"
 log "Mode: $MODE_INFO"
 log "=========================================="
 
