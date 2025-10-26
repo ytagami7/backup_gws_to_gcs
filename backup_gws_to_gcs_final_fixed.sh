@@ -2,7 +2,7 @@
 
 ################################################################################
 # GWS to GCS Backup Script (Base + Incremental + Cumulative Deletion)
-# Version: 7.10
+# Version: 7.11
 ################################################################################
 #
 # --- 使用方法 ---
@@ -24,6 +24,12 @@
 ################################################################################
 # 変更履歴 (CHANGELOG)
 ################################################################################
+#
+# Version 7.11 (2025-10-26)
+# - テストモードの処理を本番モードを基本に修正
+# - 除外パターンはテスト・本番共通で適用
+# - テストモードでは転送量制限（10MB）のみ追加
+# - テストが本番の動作を正しく反映するように改善
 #
 # Version 7.10 (2025-10-26)
 # - --max-files オプションが存在しないため、--max-transfer で転送量制限を実現
@@ -171,12 +177,12 @@ RCLONE_REMOTE_NAME="gdrive_service_account"
 
 # バックアップ対象のユーザーメールアドレス
 USERS=(
-  "a.ohsaki@ycomps.co.jp"
-  "a.tanaka@ycomps.co.jp"
+  #"a.ohsaki@ycomps.co.jp"
+  #"a.tanaka@ycomps.co.jp"
   "aikawa@ycomps.co.jp"
-  "k.koyama@ycomps.co.jp"
-  "tutida@ycomps.co.jp"
-  "ytagami@ycomps.co.jp"
+  #"k.koyama@ycomps.co.jp"
+  #"tutida@ycomps.co.jp"
+  #"ytagami@ycomps.co.jp"
 )
 
 # 共有ドライブ設定（実際に存在するドライブ）
@@ -422,22 +428,15 @@ backup_drive() {
       rclone_opts+=("--drive-shared-with-me" "--drive-root-folder-id" "$drive_id")
     fi
     
-    # テストモード: 除外パターン + 転送量制限
+    # 除外パターンを適用（テスト・本番共通）
+    for pattern in "${EXCLUDE_PATTERNS[@]}"; do
+      rclone_opts+=(--exclude "$pattern")
+    done
+    
+    # テストモード: 転送量制限のみ追加
     if [ "$TEST_MODE" = true ]; then
-      log "🧪 テストモード: 除外パターン適用 + 転送量制限"
-      
-      # 除外パターンを適用
-      for pattern in "${EXCLUDE_PATTERNS[@]}"; do
-        rclone_opts+=(--exclude "$pattern")
-      done
-      
-      # 転送量制限（100ファイル相当のサイズ）
-      rclone_opts+=(--max-transfer 100M)
-    else
-      # 通常モード: 除外パターンを使用
-      for pattern in "${EXCLUDE_PATTERNS[@]}"; do
-        rclone_opts+=(--exclude "$pattern")
-      done
+      log "🧪 テストモード: 転送量制限（10MB）を追加"
+      rclone_opts+=(--max-transfer 10M)
     fi
     
     # Dry-runモード
@@ -495,22 +494,15 @@ backup_drive() {
       rclone_opts+=("--drive-shared-with-me" "--drive-root-folder-id" "$drive_id")
     fi
     
-    # テストモード: 除外パターン + 転送量制限
+    # 除外パターンを適用（テスト・本番共通）
+    for pattern in "${EXCLUDE_PATTERNS[@]}"; do
+      rclone_opts+=(--exclude "$pattern")
+    done
+    
+    # テストモード: 転送量制限のみ追加
     if [ "$TEST_MODE" = true ]; then
-      log "🧪 テストモード: 除外パターン適用 + 転送量制限"
-      
-      # 除外パターンを適用
-      for pattern in "${EXCLUDE_PATTERNS[@]}"; do
-        rclone_opts+=(--exclude "$pattern")
-      done
-      
-      # 転送量制限（100ファイル相当のサイズ）
-      rclone_opts+=(--max-transfer 100M)
-    else
-      # 通常モード: 除外パターンを使用
-      for pattern in "${EXCLUDE_PATTERNS[@]}"; do
-        rclone_opts+=(--exclude "$pattern")
-      done
+      log "🧪 テストモード: 転送量制限（10MB）を追加"
+      rclone_opts+=(--max-transfer 10M)
     fi
     
     # Dry-runモード
