@@ -459,8 +459,12 @@ backup_drive() {
     
     # エラーチェック
     if [ $result -ne 0 ]; then
-      log "❌ ERROR: Backup failed for ${drive_type} $drive_name (exit code: $result)"
-      return 1
+      if [ "$TEST_MODE" = true ] && [ $result -eq 10 ]; then
+        log "✅ SUCCESS: テストモード時間制限により正常終了 for ${drive_type} $drive_name"
+      else
+        log "❌ ERROR: Backup failed for ${drive_type} $drive_name (exit code: $result)"
+        return 1
+      fi
     else
       log "✅ SUCCESS: 初回バックアップ完了 for ${drive_type} $drive_name"
     fi
@@ -526,8 +530,12 @@ backup_drive() {
     
     # エラーチェック
     if [ $result -ne 0 ]; then
-      log "❌ ERROR: Incremental backup failed for ${drive_type} $drive_name (exit code: $result)"
-      return 1
+      if [ "$TEST_MODE" = true ] && [ $result -eq 10 ]; then
+        log "✅ SUCCESS: テストモード時間制限により正常終了 for ${drive_type} $drive_name"
+      else
+        log "❌ ERROR: Incremental backup failed for ${drive_type} $drive_name (exit code: $result)"
+        return 1
+      fi
     else
       log "✅ SUCCESS: 増分バックアップ完了 for ${drive_type} $drive_name"
     fi
