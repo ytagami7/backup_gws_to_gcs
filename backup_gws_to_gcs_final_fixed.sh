@@ -2,7 +2,7 @@
 
 ################################################################################
 # GWS to GCS Backup Script (Base + Incremental + Cumulative Deletion)
-# Version: 7.2
+# Version: 7.3
 ################################################################################
 #
 # --- 使用方法 ---
@@ -24,6 +24,10 @@
 ################################################################################
 # 変更履歴 (CHANGELOG)
 ################################################################################
+#
+# Version 7.3 (2025-10-26)
+# - Shared Drivesの初回判定ロジックを修正（rclone lsd → rclone lsf に変更）
+# - 初回バックアップが正しく実行されるように改善
 #
 # Version 7.2 (2025-10-26)
 # - production モードの引数を --production に変更（--test, --dry-run と統一）
@@ -349,7 +353,8 @@ backup_drive() {
       is_first=true
     fi
   else
-    if ! rclone lsd "$base_path" &>/dev/null; then
+    # Shared Drives: baseフォルダの存在確認
+    if ! rclone lsf "$base_path" --max-depth 1 2>/dev/null | grep -q .; then
       is_first=true
     fi
   fi
