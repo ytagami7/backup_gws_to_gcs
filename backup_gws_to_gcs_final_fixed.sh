@@ -2,7 +2,7 @@
 
 ################################################################################
 # GWS to GCS Backup Script (Base + Incremental + Cumulative Deletion)
-# Version: 7.5
+# Version: 7.6
 ################################################################################
 #
 # --- 使用方法 ---
@@ -24,6 +24,11 @@
 ################################################################################
 # 変更履歴 (CHANGELOG)
 ################################################################################
+#
+# Version 7.6 (2025-10-26)
+# - テストモードでも本番と同じ除外パターンを適用するように修正
+# - 除外パターン適用後にファイル数制限を実行（本番と同じ動作をテスト）
+# - テストモードと本番モードの動作を統一
 #
 # Version 7.5 (2025-10-26)
 # - テストモードでの --files-from と --exclude の競合エラーを完全解決
@@ -397,15 +402,20 @@ backup_drive() {
       rclone_opts+=("--drive-shared-with-me" "--drive-root-folder-id" "$drive_id")
     fi
     
-    # テストモード: ファイル数制限
+    # テストモード: 除外パターン適用後にファイル数制限
     if [ "$TEST_MODE" = true ]; then
-      log "🧪 テストモード: 最初の${MAX_FILES_PER_USER}ファイルのみ処理"
+      log "🧪 テストモード: 除外パターン適用後に最初の${MAX_FILES_PER_USER}ファイルのみ処理"
       
       local temp_file=$(mktemp)
       local lsf_opts=(
         "${RCLONE_REMOTE_NAME}:"
         --files-only -R
       )
+      
+      # 除外パターンを適用
+      for pattern in "${EXCLUDE_PATTERNS[@]}"; do
+        lsf_opts+=(--exclude "$pattern")
+      done
       
       if [ "$drive_type" = "mydrive" ]; then
         lsf_opts+=("--drive-impersonate" "$drive_name")
@@ -485,9 +495,9 @@ backup_drive() {
       rclone_opts+=("--drive-shared-with-me" "--drive-root-folder-id" "$drive_id")
     fi
     
-    # テストモード: ファイル数制限
+    # テストモード: 除外パターン適用後にファイル数制限
     if [ "$TEST_MODE" = true ]; then
-      log "🧪 テストモード: 最初の${MAX_FILES_PER_USER}ファイルのみ処理"
+      log "🧪 テストモード: 除外パターン適用後に最初の${MAX_FILES_PER_USER}ファイルのみ処理"
       
       local temp_file=$(mktemp)
       local lsf_opts=(
@@ -495,6 +505,11 @@ backup_drive() {
         --files-only -R
         --max-age 24h
       )
+      
+      # 除外パターンを適用
+      for pattern in "${EXCLUDE_PATTERNS[@]}"; do
+        lsf_opts+=(--exclude "$pattern")
+      done
       
       if [ "$drive_type" = "mydrive" ]; then
         lsf_opts+=("--drive-impersonate" "$drive_name")
