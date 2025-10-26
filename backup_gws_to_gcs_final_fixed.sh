@@ -2,7 +2,7 @@
 
 ################################################################################
 # GWS to GCS Backup Script (Base + Incremental + Cumulative Deletion)
-# Version: 7.8
+# Version: 7.9
 ################################################################################
 #
 # --- 使用方法 ---
@@ -24,6 +24,11 @@
 ################################################################################
 # 変更履歴 (CHANGELOG)
 ################################################################################
+#
+# Version 7.9 (2025-10-26)
+# - テストモードと本番モードの両方で --exclude のみを使用するように統一
+# - --files-from を完全に削除し、--max-files でファイル数制限を実現
+# - テストモードでも本番と同じ除外パターンが適用されるように修正
 #
 # Version 7.8 (2025-10-26)
 # - テストモードでも除外パターンを適用するように修正
@@ -412,33 +417,17 @@ backup_drive() {
       rclone_opts+=("--drive-shared-with-me" "--drive-root-folder-id" "$drive_id")
     fi
     
-    # テストモード: 除外パターン適用後にファイル数制限
+    # テストモード: 除外パターン + ファイル数制限
     if [ "$TEST_MODE" = true ]; then
-      log "🧪 テストモード: 除外パターン適用後に最初の${MAX_FILES_PER_USER}ファイルのみ処理"
-      
-      local temp_file=$(mktemp)
-      local lsf_opts=(
-        "${RCLONE_REMOTE_NAME}:"
-        --files-only -R
-      )
+      log "🧪 テストモード: 除外パターン適用 + 最初の${MAX_FILES_PER_USER}ファイルのみ処理"
       
       # 除外パターンを適用
       for pattern in "${EXCLUDE_PATTERNS[@]}"; do
-        lsf_opts+=(--exclude "$pattern")
+        rclone_opts+=(--exclude "$pattern")
       done
       
-      if [ "$drive_type" = "mydrive" ]; then
-        lsf_opts+=("--drive-impersonate" "$drive_name")
-      else
-        lsf_opts+=("--drive-shared-with-me" "--drive-root-folder-id" "$drive_id")
-      fi
-      
-      rclone lsf "${lsf_opts[@]}" 2>/dev/null | head -n $MAX_FILES_PER_USER > "$temp_file"
-      
-      local file_count=$(wc -l < "$temp_file")
-      log "処理ファイル数: $file_count"
-      
-      rclone_opts+=(--files-from "$temp_file")
+      # ファイル数制限
+      rclone_opts+=(--max-files $MAX_FILES_PER_USER)
     else
       # 通常モード: 除外パターンを使用
       for pattern in "${EXCLUDE_PATTERNS[@]}"; do
@@ -505,34 +494,17 @@ backup_drive() {
       rclone_opts+=("--drive-shared-with-me" "--drive-root-folder-id" "$drive_id")
     fi
     
-    # テストモード: 除外パターン適用後にファイル数制限
+    # テストモード: 除外パターン + ファイル数制限
     if [ "$TEST_MODE" = true ]; then
-      log "🧪 テストモード: 除外パターン適用後に最初の${MAX_FILES_PER_USER}ファイルのみ処理"
-      
-      local temp_file=$(mktemp)
-      local lsf_opts=(
-        "${RCLONE_REMOTE_NAME}:"
-        --files-only -R
-        --max-age 24h
-      )
+      log "🧪 テストモード: 除外パターン適用 + 最初の${MAX_FILES_PER_USER}ファイルのみ処理"
       
       # 除外パターンを適用
       for pattern in "${EXCLUDE_PATTERNS[@]}"; do
-        lsf_opts+=(--exclude "$pattern")
+        rclone_opts+=(--exclude "$pattern")
       done
       
-      if [ "$drive_type" = "mydrive" ]; then
-        lsf_opts+=("--drive-impersonate" "$drive_name")
-      else
-        lsf_opts+=("--drive-shared-with-me" "--drive-root-folder-id" "$drive_id")
-      fi
-      
-      rclone lsf "${lsf_opts[@]}" 2>/dev/null | head -n $MAX_FILES_PER_USER > "$temp_file"
-      
-      local file_count=$(wc -l < "$temp_file")
-      log "処理ファイル数: $file_count"
-      
-      rclone_opts+=(--files-from "$temp_file")
+      # ファイル数制限
+      rclone_opts+=(--max-files $MAX_FILES_PER_USER)
     else
       # 通常モード: 除外パターンを使用
       for pattern in "${EXCLUDE_PATTERNS[@]}"; do
