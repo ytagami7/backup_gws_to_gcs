@@ -272,9 +272,9 @@ BACKUP_DATE=$(date +%Y%m%d)
 SHUTDOWN_DELAY=300
 	
 # rclone転送設定
-RCLONE_TRANSFERS=4
+RCLONE_TRANSFERS=8
 RCLONE_CHECKERS=8
-RCLONE_CHUNK_SIZE="64M"
+RCLONE_CHUNK_SIZE="128M"
 RCLONE_TPS_LIMIT=150
 RCLONE_TIMEOUT="3h"
 RCLONE_RETRIES=3
@@ -479,6 +479,8 @@ backup_drive() {
     cumulative_deleted_path="gs://${GCS_BUCKET}/${GCS_BACKUP_ROOT}/shared_drives/${safe_name}/CUMULATIVE_DELETED.txt"
     last_backup_time_path="/home/ytagami/backup_times/shared_${safe_name}_LAST_BACKUP_TIME.txt"
   fi
+  
+  log "📁 保存先: $base_path"
   
   # 初回判定（統一ロジック：ファイル数で判別）
   local is_first=false
