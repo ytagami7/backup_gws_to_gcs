@@ -426,7 +426,8 @@ backup_drive() {
     if [ "$drive_type" = "mydrive" ]; then
       rclone_opts+=("--drive-impersonate" "$drive_name")
     else
-      rclone_opts+=("--drive-shared-with-me" "--drive-root-folder-id" "$drive_id")
+      # 共有ドライブ: 管理者アカウントでimpersonateしてアクセス
+      rclone_opts+=("--drive-impersonate" "ytagami@ycomps.co.jp" "--drive-root-folder-id" "$drive_id")
     fi
     
     # 除外パターンを適用（テスト・本番共通）
@@ -492,7 +493,8 @@ backup_drive() {
     if [ "$drive_type" = "mydrive" ]; then
       rclone_opts+=("--drive-impersonate" "$drive_name")
     else
-      rclone_opts+=("--drive-shared-with-me" "--drive-root-folder-id" "$drive_id")
+      # 共有ドライブ: 管理者アカウントでimpersonateしてアクセス
+      rclone_opts+=("--drive-impersonate" "ytagami@ycomps.co.jp" "--drive-root-folder-id" "$drive_id")
     fi
     
     # 除外パターンを適用（テスト・本番共通）
