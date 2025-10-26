@@ -74,6 +74,7 @@ done
 #==============================================================================
 
 # GCS設定
+GCS_REMOTE="gcs_backup:yps-gws-backup-bucket-20251022"  
 GCS_BUCKET="yps-gws-backup-bucket-20251022"
 GCS_BACKUP_ROOT="BACKUP"
 
@@ -310,7 +311,7 @@ get_shared_drive_id() {
 
 get_last_backup_date_mydrive() {
   local safe_user=$1
-  local incremental_base="gcs_backup:${GCS_BUCKET}/${GCS_BACKUP_ROOT}/mydrive/${safe_user}/incremental/"
+  local incremental_base="${GCS_REMOTE}/${GCS_BACKUP_ROOT}/mydrive/${safe_user}/incremental/"
   
   # rclone lsd で増分フォルダの一覧を取得し、最新の日付を抽出
   local last_date=$(rclone lsd "$incremental_base" 2>/dev/null \
@@ -328,7 +329,7 @@ get_last_backup_date_mydrive() {
 
 get_last_backup_date_shared() {
   local safe_drive_name=$1
-  local incremental_base="gcs_backup:${GCS_BUCKET}/${GCS_BACKUP_ROOT}/shared_drives/${safe_drive_name}/incremental/"
+  local incremental_base="${GCS_REMOTE}/${GCS_BACKUP_ROOT}/shared_drives/${safe_drive_name}/incremental/"
   
   # rclone lsd で増分フォルダの一覧を取得し、最新の日付を抽出
   local last_date=$(rclone lsd "$incremental_base" 2>/dev/null \
@@ -393,8 +394,8 @@ calculate_max_age() {
 is_first_backup_mydrive() {
   local user=$1
   local safe_user=$2
-  local base_path="gcs_backup:${GCS_BUCKET}/${GCS_BACKUP_ROOT}/mydrive/${safe_user}/base/"
-  
+  #local base_path="${GCS_REMOTE}/${GCS_BACKUP_ROOT}/mydrive/${safe_user}/base/"
+  local base_path="${GCS_REMOTE}/${GCS_BACKUP_ROOT}/mydrive/${safe_user}/base/"
   if rclone lsf "$base_path" --max-depth 1 2>/dev/null | grep -q .; then
     return 1
   else
@@ -408,7 +409,7 @@ is_first_backup_mydrive() {
 
 is_first_backup_shared() {
   local safe_drive_name=$1
-  local base_path="gcs_backup:${GCS_BUCKET}/${GCS_BACKUP_ROOT}/shared_drives/${safe_drive_name}/base/"
+  local base_path="${GCS_REMOTE}/${GCS_BACKUP_ROOT}/shared_drives/${safe_drive_name}/base/"
   
   if rclone lsf "$base_path" --max-depth 1 2>/dev/null | grep -q .; then
     return 1
@@ -438,14 +439,14 @@ backup_user_mydrive() {
   
   log "📁 GCSフォルダ名: $safe_user (元: $user)"
   
-  local base_path="gcs_backup:${GCS_BUCKET}/${GCS_BACKUP_ROOT}/mydrive/${safe_user}/base/"
-  local incr_path="gcs_backup:${GCS_BUCKET}/${GCS_BACKUP_ROOT}/mydrive/${safe_user}/incremental/${BACKUP_DATE}/"
+  local base_path="${GCS_REMOTE}/${GCS_BACKUP_ROOT}/mydrive/${safe_user}/base/"
+  local incr_path="${GCS_REMOTE}/${GCS_BACKUP_ROOT}/mydrive/${safe_user}/incremental/${BACKUP_DATE}/"
   local cumulative_deleted_path="gs://${GCS_BUCKET}/${GCS_BACKUP_ROOT}/mydrive/${safe_user}/CUMULATIVE_DELETED.txt"
   
   # base再構築モードの場合、既存baseをリネーム
   if [ "$REBUILD_BASE" = true ]; then
     log "🔄 Base再構築モード: 既存baseを base_archive_${BACKUP_DATE} にリネーム"
-    local archive_path="gcs_backup:${GCS_BUCKET}/${GCS_BACKUP_ROOT}/mydrive/${safe_user}/base_archive_${BACKUP_DATE}/"
+    local archive_path="${GCS_REMOTE}/${GCS_BACKUP_ROOT}/mydrive/${safe_user}/base_archive_${BACKUP_DATE}/"
     rclone moveto "$base_path" "$archive_path" 2>/dev/null || true
   fi
   
@@ -496,7 +497,9 @@ backup_user_mydrive() {
       log "✅ SUCCESS: 初回バックアップ完了 for user $user"
     fi
     
-    if [ "$PRODUCTION_MODE" = true ]; then
+
+#    if [ "$PRODUCTION_MODE" = true ]; then
+    if false; then
       echo "" | gsutil cp - "$cumulative_deleted_path" 2>/dev/null || true
       log "📝 累積削除リスト初期化"
     fi
@@ -554,7 +557,9 @@ backup_user_mydrive() {
       log "✅ SUCCESS: 増分バックアップ完了 for user $user"
     fi
     
-    if [ "$PRODUCTION_MODE" = true ]; then
+    #if [ "$PRODUCTION_MODE" = true ]; then
+    if false; then  # 削除ファイル検知を無効化
+
       log "🔍 削除ファイル検知中..."
       
       local tmp_base="/tmp/base_files_${safe_user}.txt"
@@ -633,14 +638,14 @@ backup_shared_drive() {
   
   log "📁 GCSフォルダ名: $safe_drive_name (元: $drive_name)"
   
-  local base_path="gcs_backup:${GCS_BUCKET}/${GCS_BACKUP_ROOT}/shared_drives/${safe_drive_name}/base/"
-  local incr_path="gcs_backup:${GCS_BUCKET}/${GCS_BACKUP_ROOT}/shared_drives/${safe_drive_name}/incremental/${BACKUP_DATE}/"
+  local base_path="${GCS_REMOTE}/${GCS_BACKUP_ROOT}/shared_drives/${safe_drive_name}/base/"
+  local incr_path="${GCS_REMOTE}/${GCS_BACKUP_ROOT}/shared_drives/${safe_drive_name}/incremental/${BACKUP_DATE}/"
   local cumulative_deleted_path="gs://${GCS_BUCKET}/${GCS_BACKUP_ROOT}/shared_drives/${safe_drive_name}/CUMULATIVE_DELETED.txt"
   
   # base再構築モードの場合、既存baseをリネーム
   if [ "$REBUILD_BASE" = true ]; then
     log "🔄 Base再構築モード: 既存baseを base_archive_${BACKUP_DATE} にリネーム"
-    local archive_path="gcs_backup:${GCS_BUCKET}/${GCS_BACKUP_ROOT}/shared_drives/${safe_drive_name}/base_archive_${BACKUP_DATE}/"
+    local archive_path="${GCS_REMOTE}/${GCS_BACKUP_ROOT}/shared_drives/${safe_drive_name}/base_archive_${BACKUP_DATE}/"
     rclone moveto "$base_path" "$archive_path" 2>/dev/null || true
   fi
   
@@ -652,7 +657,7 @@ backup_shared_drive() {
       "${RCLONE_REMOTE_NAME}:/"
       "$base_path"
       --drive-impersonate "$ADMIN_USER"
-      # --drive-shared-with-me
+      --drive-shared-with-me
       --drive-root-folder-id "$drive_id"
       --log-file="$LOG_FILE"
       --log-level INFO
@@ -693,7 +698,8 @@ backup_shared_drive() {
       log "✅ SUCCESS: 初回バックアップ完了 for shared drive $drive_name"
     fi
     
-    if [ "$PRODUCTION_MODE" = true ]; then
+    #if [ "$PRODUCTION_MODE" = true ]; then
+    if false; then  # 削除ファイル検知を無効化
       echo "" | gsutil cp - "$cumulative_deleted_path" 2>/dev/null || true
       log "📝 累積削除リスト初期化"
     fi
@@ -711,7 +717,7 @@ backup_shared_drive() {
       "${RCLONE_REMOTE_NAME}:/"
       "$incr_path"
       --drive-impersonate "$ADMIN_USER"
-      # --drive-shared-with-me
+      --drive-shared-with-me
       --drive-root-folder-id "$drive_id"
       --log-file="$LOG_FILE"
       --log-level INFO
@@ -753,7 +759,8 @@ backup_shared_drive() {
       log "✅ SUCCESS: 増分バックアップ完了 for shared drive $drive_name"
     fi
     
-    if [ "$PRODUCTION_MODE" = true ]; then
+    #if [ "$PRODUCTION_MODE" = true ]; then
+    if false; then  # 削除ファイル検知を無効化
       log "🔍 削除ファイル検知中..."
       
       local tmp_base="/tmp/base_files_shared_${safe_drive_name}.txt"
@@ -769,7 +776,7 @@ backup_shared_drive() {
       
       rclone lsf "${RCLONE_REMOTE_NAME}:/" \
         --drive-impersonate "$ADMIN_USER" \
-        # --drive-shared-with-me \
+        --drive-shared-with-me \
         --drive-root-folder-id "$drive_id" \
         --files-only \
         --recursive \
@@ -821,7 +828,8 @@ log "WordPress除外: 有効（レベル1: 全体除外）"
 log "--max-age 自動延長: 有効（最大${MAX_AGE_LIMIT_DAYS}日）"
 log "=========================================="
 
-if [ "$PRODUCTION_MODE" = true ]; then
+#if [ "$PRODUCTION_MODE" = true ]; then
+if false; then  # 削除ファイル検知を無効化
   log "⚠️  PRODUCTION MODE: Instance will shutdown ${SHUTDOWN_DELAY}s after completion"
   log "   To cancel shutdown, run: sudo shutdown -c"
 else
@@ -859,7 +867,8 @@ log "=========================================="
 # バックアップ完了後の処理
 #==============================================================================
 
-if [ "$PRODUCTION_MODE" = true ]; then
+#if [ "$PRODUCTION_MODE" = true ]; then
+if false; then  # 削除ファイル検知を無効化
   log ""
   log "⚠️  PRODUCTION MODE: Scheduling system shutdown in ${SHUTDOWN_DELAY} seconds..."
   log "🕐 Shutdown scheduled at $(date -d "+${SHUTDOWN_DELAY} seconds" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date)"
