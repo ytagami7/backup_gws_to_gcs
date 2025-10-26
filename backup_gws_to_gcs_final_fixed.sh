@@ -2,7 +2,7 @@
 
 ################################################################################
 # GWS to GCS Backup Script (Base + Incremental + Cumulative Deletion)
-# Version: 7.4
+# Version: 7.5
 ################################################################################
 #
 # --- 使用方法 ---
@@ -24,6 +24,11 @@
 ################################################################################
 # 変更履歴 (CHANGELOG)
 ################################################################################
+#
+# Version 7.5 (2025-10-26)
+# - テストモードでの --files-from と --exclude の競合エラーを完全解決
+# - テストモードでは除外パターンを適用せず、ファイル数制限のみ実行
+# - 本番モードでは除外パターンを正常に適用
 #
 # Version 7.4 (2025-10-26)
 # - テストモードでの --files-from と --exclude の競合エラーを修正
@@ -413,7 +418,7 @@ backup_drive() {
       local file_count=$(wc -l < "$temp_file")
       log "処理ファイル数: $file_count"
       
-      rclone_opts+=(--files-from-raw "$temp_file")
+      rclone_opts+=(--files-from "$temp_file")
     else
       # 通常モード: 除外パターンを使用
       for pattern in "${EXCLUDE_PATTERNS[@]}"; do
@@ -502,7 +507,7 @@ backup_drive() {
       local file_count=$(wc -l < "$temp_file")
       log "処理ファイル数: $file_count"
       
-      rclone_opts+=(--files-from-raw "$temp_file")
+      rclone_opts+=(--files-from "$temp_file")
     else
       # 通常モード: 除外パターンを使用
       for pattern in "${EXCLUDE_PATTERNS[@]}"; do
