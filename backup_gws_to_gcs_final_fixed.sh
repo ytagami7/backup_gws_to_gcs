@@ -450,10 +450,6 @@ backup_drive() {
     rclone copy "${rclone_opts[@]}"
     local result=$?
     
-    # テストモードの一時ファイル削除
-    if [ "$TEST_MODE" = true ]; then
-      rm -f "$temp_file"
-    fi
     
     # エラーチェック
     if [ $result -ne 0 ]; then
@@ -527,10 +523,6 @@ backup_drive() {
     rclone copy "${rclone_opts[@]}"
     local result=$?
     
-    # テストモードの一時ファイル削除
-    if [ "$TEST_MODE" = true ]; then
-      rm -f "$temp_file"
-    fi
     
     # エラーチェック
     if [ $result -ne 0 ]; then
