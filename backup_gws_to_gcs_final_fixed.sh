@@ -442,8 +442,8 @@ backup_drive() {
     
     # テストモード: 時間制限でファイル数制限を実現
     if [ "$TEST_MODE" = true ]; then
-      log "🧪 テストモード: 時間制限（30秒）でファイル数制限を実現"
-      rclone_opts+=(--max-duration 30s)
+      log "🧪 テストモード: 時間制限（10秒）でファイル数制限を実現"
+      rclone_opts+=(--max-duration 10s)
     fi
     
     # Dry-runモード
@@ -509,8 +509,8 @@ backup_drive() {
     
     # テストモード: 時間制限でファイル数制限を実現
     if [ "$TEST_MODE" = true ]; then
-      log "🧪 テストモード: 時間制限（30秒）でファイル数制限を実現"
-      rclone_opts+=(--max-duration 30s)
+      log "🧪 テストモード: 時間制限（10秒）でファイル数制限を実現"
+      rclone_opts+=(--max-duration 10s)
     fi
     
     # Dry-runモード
@@ -527,8 +527,8 @@ backup_drive() {
     # エラーチェック
     if [ $result -ne 0 ]; then
       log "❌ ERROR: Incremental backup failed for ${drive_type} $drive_name (exit code: $result)"
-    return 1
-  else
+      return 1
+    else
       log "✅ SUCCESS: 増分バックアップ完了 for ${drive_type} $drive_name"
     fi
     
