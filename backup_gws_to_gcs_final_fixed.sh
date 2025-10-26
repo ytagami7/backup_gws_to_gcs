@@ -2,7 +2,7 @@
 
 ################################################################################
 # GWS to GCS Backup Script (Base + Incremental + Cumulative Deletion)
-# Version: 7.13
+# Version: 7.14
 ################################################################################
 #
 # --- 使用方法 ---
@@ -24,6 +24,12 @@
 ################################################################################
 # 変更履歴 (CHANGELOG)
 ################################################################################
+#
+# Version 7.14 (2025-10-26)
+# - 重複コードを統合してexecute_rclone_backup()関数を作成
+# - 初回バックアップと増分バックアップの重複処理を削除
+# - コードの保守性と可読性を大幅に改善
+# - 約100行の重複コードを削除
 #
 # Version 7.13 (2025-10-26)
 # - 初回バックアップ判別ロジックを統一化
@@ -348,6 +354,85 @@ get_shared_drive_id() {
 
 
 #==============================================================================
+# rclone実行関数（重複コード統合）
+#==============================================================================
+
+execute_rclone_backup() {
+  local source_path="$1"
+  local dest_path="$2"
+  local backup_type="$3"  # "initial" or "incremental"
+  local drive_type="$4"
+  local drive_name="$5"
+  local drive_id="$6"
+  
+  # 基本オプション
+  local rclone_opts=(
+    "${RCLONE_REMOTE_NAME}:"
+    "$dest_path"
+    --log-file="$LOG_FILE"
+    --log-level INFO
+    --gcs-bucket-policy-only
+    --gcs-storage-class ARCHIVE
+    --transfers $RCLONE_TRANSFERS
+    --checkers $RCLONE_CHECKERS
+    --drive-chunk-size $RCLONE_CHUNK_SIZE
+    --tpslimit $RCLONE_TPS_LIMIT
+    --timeout $RCLONE_TIMEOUT
+    --retries $RCLONE_RETRIES
+    --create-empty-src-dirs
+    --progress
+  )
+  
+  # 増分バックアップの場合のみ --max-age を追加
+  if [ "$backup_type" = "incremental" ]; then
+    rclone_opts+=(--max-age 24h)
+  fi
+  
+  # ドライブタイプ別のオプション
+  if [ "$drive_type" = "mydrive" ]; then
+    rclone_opts+=("--drive-impersonate" "$drive_name")
+  else
+    # 共有ドライブ: 管理者アカウントでimpersonateしてアクセス
+    rclone_opts+=("--drive-impersonate" "ytagami@ycomps.co.jp" "--drive-root-folder-id" "$drive_id")
+  fi
+  
+  # 除外パターンを適用（テスト・本番共通）
+  for pattern in "${EXCLUDE_PATTERNS[@]}"; do
+    rclone_opts+=(--exclude "$pattern")
+  done
+  
+  # テストモード: 時間制限でファイル数制限を実現
+  if [ "$TEST_MODE" = true ]; then
+    log "🧪 テストモード: 時間制限（10秒）でファイル数制限を実現"
+    rclone_opts+=(--max-duration 10s)
+  fi
+  
+  # Dry-runモード
+  if [ "$DRY_RUN" = true ]; then
+    rclone_opts+=(--dry-run)
+  fi
+  
+  # rclone copy実行
+  log "Executing: rclone copy ${rclone_opts[*]}"
+  rclone copy "${rclone_opts[@]}"
+  local result=$?
+  
+  # エラーチェック
+  if [ $result -ne 0 ]; then
+    if [ "$TEST_MODE" = true ] && [ $result -eq 10 ]; then
+      log "✅ SUCCESS: テストモード時間制限により正常終了 for ${drive_type} $drive_name"
+    else
+      log "❌ ERROR: ${backup_type^} backup failed for ${drive_type} $drive_name (exit code: $result)"
+      return 1
+    fi
+  else
+    log "✅ SUCCESS: ${backup_type^}バックアップ完了 for ${drive_type} $drive_name"
+  fi
+  
+  return 0
+}
+
+#==============================================================================
 # 統一バックアップ関数
 #==============================================================================
 
@@ -391,65 +476,8 @@ backup_drive() {
     log "📦 初回バックアップ: フルバックアップを base/ に保存"
     log "Backup destination: $base_path"
     
-    # 基本オプション
-    local rclone_opts=(
-      "${RCLONE_REMOTE_NAME}:"
-      "$base_path"
-      --log-file="$LOG_FILE"
-      --log-level INFO
-      --gcs-bucket-policy-only
-      --gcs-storage-class ARCHIVE
-      --transfers $RCLONE_TRANSFERS
-      --checkers $RCLONE_CHECKERS
-      --drive-chunk-size $RCLONE_CHUNK_SIZE
-      --tpslimit $RCLONE_TPS_LIMIT
-      --timeout $RCLONE_TIMEOUT
-      --retries $RCLONE_RETRIES
-      --create-empty-src-dirs
-      --progress
-    )
-    
-    # ドライブタイプ別のオプション
-    if [ "$drive_type" = "mydrive" ]; then
-      rclone_opts+=("--drive-impersonate" "$drive_name")
-    else
-      # 共有ドライブ: 管理者アカウントでimpersonateしてアクセス
-      rclone_opts+=("--drive-impersonate" "ytagami@ycomps.co.jp" "--drive-root-folder-id" "$drive_id")
-    fi
-    
-    # 除外パターンを適用（テスト・本番共通）
-    for pattern in "${EXCLUDE_PATTERNS[@]}"; do
-      rclone_opts+=(--exclude "$pattern")
-    done
-    
-    # テストモード: 時間制限でファイル数制限を実現
-    if [ "$TEST_MODE" = true ]; then
-      log "🧪 テストモード: 時間制限（10秒）でファイル数制限を実現"
-      rclone_opts+=(--max-duration 10s)
-    fi
-    
-    # Dry-runモード
-    if [ "$DRY_RUN" = true ]; then
-      rclone_opts+=(--dry-run)
-    fi
-    
-    # rclone copy実行
-    log "Executing: rclone copy ${rclone_opts[*]}"
-    rclone copy "${rclone_opts[@]}"
-    local result=$?
-    
-    
-    # エラーチェック
-    if [ $result -ne 0 ]; then
-      if [ "$TEST_MODE" = true ] && [ $result -eq 10 ]; then
-        log "✅ SUCCESS: テストモード時間制限により正常終了 for ${drive_type} $drive_name"
-      else
-        log "❌ ERROR: Backup failed for ${drive_type} $drive_name (exit code: $result)"
-        return 1
-      fi
-    else
-      log "✅ SUCCESS: 初回バックアップ完了 for ${drive_type} $drive_name"
-    fi
+    # 統合されたrclone実行関数を呼び出し
+    execute_rclone_backup "" "$base_path" "initial" "$drive_type" "$drive_name" "$drive_id"
     
     # 累積削除リストを初期化（空ファイル）
     if [ "$PRODUCTION_MODE" = true ]; then
@@ -461,66 +489,8 @@ backup_drive() {
     log "🔄 増分バックアップ: 過去24時間の変更のみ"
     log "Backup destination: $incr_path"
     
-    # 基本オプション
-    local rclone_opts=(
-      "${RCLONE_REMOTE_NAME}:"
-      "$incr_path"
-      --log-file="$LOG_FILE"
-      --log-level INFO
-      --gcs-bucket-policy-only
-      --gcs-storage-class ARCHIVE
-      --max-age 24h
-      --transfers $RCLONE_TRANSFERS
-      --checkers $RCLONE_CHECKERS
-      --drive-chunk-size $RCLONE_CHUNK_SIZE
-      --tpslimit $RCLONE_TPS_LIMIT
-      --timeout $RCLONE_TIMEOUT
-      --retries $RCLONE_RETRIES
-      --create-empty-src-dirs
-      --progress
-    )
-    
-    # ドライブタイプ別のオプション
-    if [ "$drive_type" = "mydrive" ]; then
-      rclone_opts+=("--drive-impersonate" "$drive_name")
-    else
-      # 共有ドライブ: 管理者アカウントでimpersonateしてアクセス
-      rclone_opts+=("--drive-impersonate" "ytagami@ycomps.co.jp" "--drive-root-folder-id" "$drive_id")
-    fi
-    
-    # 除外パターンを適用（テスト・本番共通）
-    for pattern in "${EXCLUDE_PATTERNS[@]}"; do
-      rclone_opts+=(--exclude "$pattern")
-    done
-    
-    # テストモード: 時間制限でファイル数制限を実現
-    if [ "$TEST_MODE" = true ]; then
-      log "🧪 テストモード: 時間制限（10秒）でファイル数制限を実現"
-      rclone_opts+=(--max-duration 10s)
-    fi
-    
-    # Dry-runモード
-    if [ "$DRY_RUN" = true ]; then
-      rclone_opts+=(--dry-run)
-    fi
-    
-    # rclone copy実行
-    log "Executing: rclone copy ${rclone_opts[*]}"
-    rclone copy "${rclone_opts[@]}"
-    local result=$?
-    
-    
-    # エラーチェック
-    if [ $result -ne 0 ]; then
-      if [ "$TEST_MODE" = true ] && [ $result -eq 10 ]; then
-        log "✅ SUCCESS: テストモード時間制限により正常終了 for ${drive_type} $drive_name"
-      else
-        log "❌ ERROR: Incremental backup failed for ${drive_type} $drive_name (exit code: $result)"
-        return 1
-      fi
-    else
-      log "✅ SUCCESS: 増分バックアップ完了 for ${drive_type} $drive_name"
-    fi
+    # 統合されたrclone実行関数を呼び出し
+    execute_rclone_backup "" "$incr_path" "incremental" "$drive_type" "$drive_name" "$drive_id"
     
     # 削除ファイル検知（本番モードのみ）
     if [ "$PRODUCTION_MODE" = true ]; then
